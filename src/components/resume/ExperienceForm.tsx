@@ -5,7 +5,10 @@ import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Plus, Trash2 } from 'lucide-react';
+import { Plus, Trash2, Sparkles, Loader2 } from 'lucide-react';
+import { useState } from 'react';
+import { supabase } from '@/integrations/supabase/client';
+import { useToast } from '@/components/ui/use-toast';
 
 interface ExperienceFormProps {
   data: Experience[];
@@ -13,6 +16,8 @@ interface ExperienceFormProps {
 }
 
 export const ExperienceForm: React.FC<ExperienceFormProps> = ({ data, onChange }) => {
+  const [generatingId, setGeneratingId] = useState<string | null>(null);
+  const { toast } = useToast();
   const addExperience = () => {
     const newExperience: Experience = {
       id: Date.now().toString(),
@@ -31,6 +36,37 @@ export const ExperienceForm: React.FC<ExperienceFormProps> = ({ data, onChange }
     onChange(data.map(exp => 
       exp.id === id ? { ...exp, [field]: value } : exp
     ));
+  };
+
+  const generateDescription = async (exp: Experience) => {
+    setGeneratingId(exp.id);
+    try {
+      const prompt = `Position: ${exp.position} at ${exp.company}. Location: ${exp.location}. Generate professional job responsibilities and achievements.`;
+      
+      const { data: result, error } = await supabase.functions.invoke('generate-resume-content', {
+        body: { 
+          type: 'experience', 
+          prompt: prompt
+        }
+      });
+
+      if (error) throw error;
+      
+      updateExperience(exp.id, 'description', result.content);
+      toast({
+        title: "Description Generated",
+        description: "AI has created a professional job description."
+      });
+    } catch (error) {
+      console.error('Error generating description:', error);
+      toast({
+        title: "Error",
+        description: "Failed to generate description. Please try again.",
+        variant: "destructive"
+      });
+    } finally {
+      setGeneratingId(null);
+    }
   };
 
   const removeExperience = (id: string) => {
@@ -121,11 +157,30 @@ export const ExperienceForm: React.FC<ExperienceFormProps> = ({ data, onChange }
             </div>
 
             <div className="space-y-2">
-              <Label>Description</Label>
+              <div className="flex items-center justify-between">
+                <Label className="text-sm font-medium text-foreground">
+                  Job Description & Achievements
+                </Label>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => generateDescription(experience)}
+                  disabled={generatingId === experience.id || !experience.position || !experience.company}
+                  className="h-8"
+                >
+                  {generatingId === experience.id ? (
+                    <Loader2 className="w-3 h-3 animate-spin mr-1" />
+                  ) : (
+                    <Sparkles className="w-3 h-3 mr-1" />
+                  )}
+                  AI Generate
+                </Button>
+              </div>
               <Textarea
                 value={experience.description}
                 onChange={(e) => updateExperience(experience.id, 'description', e.target.value)}
-                placeholder="Describe your responsibilities and achievements..."
+                placeholder="Describe your responsibilities and achievements or use AI to generate..."
                 rows={3}
                 className="resize-none"
               />

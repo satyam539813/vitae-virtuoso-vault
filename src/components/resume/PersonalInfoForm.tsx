@@ -2,6 +2,11 @@ import { PersonalInfo } from '@/types/resume';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { Button } from '@/components/ui/button';
+import { Sparkles, Loader2 } from 'lucide-react';
+import { useState } from 'react';
+import { supabase } from '@/integrations/supabase/client';
+import { useToast } from '@/components/ui/use-toast';
 
 interface PersonalInfoFormProps {
   data: PersonalInfo;
@@ -9,8 +14,42 @@ interface PersonalInfoFormProps {
 }
 
 export const PersonalInfoForm: React.FC<PersonalInfoFormProps> = ({ data, onChange }) => {
+  const [isGenerating, setIsGenerating] = useState(false);
+  const { toast } = useToast();
+  
   const handleChange = (field: keyof PersonalInfo, value: string) => {
     onChange({ ...data, [field]: value });
+  };
+
+  const generateSummary = async () => {
+    setIsGenerating(true);
+    try {
+      const prompt = `Name: ${data.fullName}, Email: ${data.email}, Location: ${data.location}${data.website ? `, Website: ${data.website}` : ''}${data.linkedin ? `, LinkedIn: ${data.linkedin}` : ''}`;
+      
+      const { data: result, error } = await supabase.functions.invoke('generate-resume-content', {
+        body: { 
+          type: 'summary', 
+          prompt: prompt
+        }
+      });
+
+      if (error) throw error;
+      
+      onChange({ ...data, summary: result.content });
+      toast({
+        title: "Summary Generated",
+        description: "AI has created a professional summary for you."
+      });
+    } catch (error) {
+      console.error('Error generating summary:', error);
+      toast({
+        title: "Error",
+        description: "Failed to generate summary. Please try again.",
+        variant: "destructive"
+      });
+    } finally {
+      setIsGenerating(false);
+    }
   };
 
   return (
@@ -86,12 +125,31 @@ export const PersonalInfoForm: React.FC<PersonalInfoFormProps> = ({ data, onChan
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor="summary">Professional Summary</Label>
+        <div className="flex items-center justify-between">
+          <Label htmlFor="summary" className="text-sm font-medium text-foreground">
+            Professional Summary
+          </Label>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={generateSummary}
+            disabled={isGenerating || !data.fullName}
+            className="h-8"
+          >
+            {isGenerating ? (
+              <Loader2 className="w-3 h-3 animate-spin mr-1" />
+            ) : (
+              <Sparkles className="w-3 h-3 mr-1" />
+            )}
+            AI Generate
+          </Button>
+        </div>
         <Textarea
           id="summary"
           value={data.summary}
           onChange={(e) => handleChange('summary', e.target.value)}
-          placeholder="Brief overview of your professional background and career goals..."
+          placeholder="Brief overview of your professional background and career goals or use AI to generate one..."
           rows={4}
           className="transition-all duration-200 focus:ring-2 focus:ring-primary/20 resize-none"
         />
